@@ -1,0 +1,31 @@
+# Sources for the polling bot (adapters arrive in Phase 2). DRAFT for human review.
+
+region:
+  country: US
+  currency: USD
+  # Skip giveaways limited to countries outside this list.
+  eligible_countries: [US]
+
+# Logged-out RSS/Atom feeds. Only URLs listed here may be served as text/plain or
+# application/octet-stream by the fetcher.
+#
+# Reddit subreddit RSS is ON HOLD until Reddit's actual robots.txt is checked in Phase 2.
+# If it disallows us, these are dropped in favour of the official Reddit API (via
+# api_client.py) or Reddit posts found through Brave results. Candidates:
+#   r/PokemonTCG, r/pkmntcgcollections, r/PokemonTCGDeals  (/new/.rss)
+feeds: []
+
+brave:
+  queries:
+    - "pokemon tcg giveaway"
+    - "pokemon card giveaway US"
+    - "pokemon booster box giveaway"
+
+youtube:
+  queries:
+    - "pokemon card giveaway"
+    - "pokemon tcg giveaway"
+
+rate_limits:
+  # Minimum seconds between requests to the same host.
+  per_host_min_interval_seconds: 5

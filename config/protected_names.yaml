@@ -1,0 +1,33 @@
+# Lookalike detection inputs (see CLAUDE.md "Lookalike check").
+# DRAFT for human review.
+
+# Official domains. Seeded as TRUSTED by `radar.admin seed`.
+# BLOCK: edit distance <= 2 from one of these, an official brand label plus a
+# deceptive affix below, or the official domain embedded in another site's hostname.
+official_domains:
+  - pokemon.com
+  - pokemoncenter.com
+  - tcgplayer.com
+
+# Affixes that, joined to an official brand label (e.g. pokemon-claim.com,
+# pokemoncenterofficial.net, claim-tcgplayer.com), mean BLOCK.
+deceptive_affixes:
+  - official
+  - giveaway
+  - giveaways
+  - support
+  - claim
+  - prize
+  - prizes
+  - winner
+  - winners
+  - verify
+  - rewards
+
+# Any non-TRUSTED, non-PLATFORM domain containing one of these gets a LOOKALIKE? flag
+# (review, never block). Example: pokemoncardshop.com.
+brand_names:
+  - pokemon
+  - pkmn
+  - ptcg
+  - tcg

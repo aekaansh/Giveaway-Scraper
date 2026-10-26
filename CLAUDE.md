@@ -3,6 +3,23 @@
 ## Purpose
 Discover, classify and alert on Pokemon TCG giveaways. The human enters manually.
 
+## Phases
+- Phase 1: foundation, DB, url_guard, scoring, widgets, accounts, tests (no live sources yet)
+- Phase 2: adapters, classifier, run.py, Discord notify, poll.yml and backup.yml
+- Phase 3: Streamlit dashboard (queue, Filtered, Runs tabs)
+- Phase 4: assisted entry (local only, as described below)
+
+## Sources and region
+- Sources: Brave Search API, YouTube Data API, Reddit subreddit RSS (logged-out `.rss` feeds,
+  honest User-Agent, polite rate limits). TRUSTED sites/forums are added only after human vetting.
+- Reddit RSS is ON HOLD until Reddit's actual robots.txt is checked (Phase 2). If it disallows
+  us, drop the feeds and use either the official Reddit API (via `api_client.py`) or Reddit
+  posts found through Brave results.
+- Instagram, TikTok and X are NEVER scraped or read logged-out. They enter only as links found
+  in search results, and are judged with the PLATFORM account rules.
+- Region: USA. USD, US-eligible giveaways only; skip ones limited to other countries.
+  Region is configurable in `config/sources.yaml`.
+
 ## Hard rules (never violate)
 - NEVER auto-submit entry forms, click "enter", or perform follows/likes/reposts/comments/tags.
 - NEVER create accounts, use multiple accounts, or solve/bypass CAPTCHAs or bot checks.
@@ -44,6 +61,7 @@ Discover, classify and alert on Pokemon TCG giveaways. The human enters manually
   - `domain_tiers` (domain, tier: TRUSTED / PLATFORM / LINK_HUB / BLOCKED, added_by, added_at, note)
   - `known_accounts` (platform, handle, added_by, added_at, note)
   - `run_log` (started_at, finished_at, items_found, alerts_sent, errors)
+  - `widget_links` (host_url, widget_url, kind, found_at): host page -> embedded widget
 - NO personal data tables in Turso. (The former `user_profile` table is local-only, if used at all.)
 
 ### Human-only lists
@@ -53,8 +71,9 @@ Discover, classify and alert on Pokemon TCG giveaways. The human enters manually
 - Only these may write TRUSTED/BLOCKED/known_accounts rows: dashboard buttons and `radar.admin`
   commands run by the human. Write functions live in `src/radar/admin_store.py`.
 - The polling path (`run.py`, adapters, classify, scoring, url_guard, notify) must NEVER import
-  `admin_store.py`. Exception: url_guard may add a domain as BLOCKED after a Safe Browsing
-  match (tightening only, never loosening). A test enforces this import rule.
+  `admin_store.py`. Exception: url_guard may add an UNKNOWN domain as BLOCKED after a Safe
+  Browsing match (tightening only, never loosening), via `store.block_domain_from_guard`.
+  A test enforces this import rule.
 
 ### Backups
 - A weekly GitHub Actions job runs `radar.admin export` and uploads a SQL/JSON dump as a
@@ -62,7 +81,9 @@ Discover, classify and alert on Pokemon TCG giveaways. The human enters manually
 
 ## Scheduling (GitHub Actions)
 - `.github/workflows/poll.yml`:
-  - triggers: `schedule` cron `*/45 * * * *` and `workflow_dispatch` (manual "Run workflow" button)
+  - triggers: `schedule` cron `17 * * * *` (hourly at an offset minute) and `workflow_dispatch`
+    (manual "Run workflow" button). Not `*/45`: that gives uneven gaps and roughly doubles
+    Actions usage, since each run is billed rounded up to whole minutes.
   - `concurrency: { group: poll, cancel-in-progress: false }` so runs never overlap
   - `timeout-minutes: 10`
   - steps: checkout → setup uv/Python 3.12 → `uv sync` → `radar.admin migrate` → `radar.run --once`
@@ -84,13 +105,19 @@ Discover, classify and alert on Pokemon TCG giveaways. The human enters manually
 - Can also run locally: `DB_BACKEND=turso uv run streamlit run app/dashboard.py`.
 
 ## Link safety (phishing & scam sites)
-All outbound URLs go through `src/radar/url_guard.py`. No other module may fetch a URL directly.
+All outbound page/feed URLs go through `src/radar/url_guard.py`. Keyed/official API calls go
+through `src/radar/api_client.py`. No other module may make network calls (the Anthropic SDK in
+`classify.py` is the only exception); an import-graph test enforces this.
 Goal: block real threats, but prefer FLAG + review over BLOCK whenever a check is a heuristic,
 so legitimate giveaways are not silently lost.
 
 ### Check before fetch
 - Every URL is checked BEFORE any fetch or alert:
-  1. Google Safe Browsing lookup → any match = BLOCKED.
+  1. Google Safe Browsing lookup → any match blocks that exact URL and writes a
+     `filtered_items` row. If the domain is UNKNOWN, the whole domain is also added as
+     BLOCKED. Domains already in `domain_tiers` (TRUSTED incl. platform hosts like gleam.io,
+     PLATFORM like reddit.com, LINK_HUB like bit.ly) keep their tier: only the URL is blocked
+     (the cached match keeps it blocked).
   2. Domain age via RDAP → younger than 30 days = NEW DOMAIN flag (goes to review, not blocked).
   3. Lookalike check (see below).
 - Reputation results are cached in the `url_checks` table with a TTL of 24h.
@@ -116,7 +143,8 @@ so legitimate giveaways are not silently lost.
 - LINK_HUB: link-in-bio and shortener hosts (linktr.ee, beacons.ai, bit.ly, etc.).
   Never alert on these directly — resolve to the final destination and judge that.
 - UNKNOWN: anything not in the table. Plain fetcher only (no JavaScript). Goes to review.
-- BLOCKED: failed Safe Browsing / hard lookalike rule, or marked Scam on the dashboard.
+- BLOCKED: failed Safe Browsing (UNKNOWN domains) / hard lookalike rule, or marked Scam on
+  the dashboard.
   Never fetched again.
 
 ### Account signals (PLATFORM posts)
@@ -125,6 +153,7 @@ so legitimate giveaways are not silently lost.
   post rather than someone's entry/comment/repost.
 - Ping Discord only if: account is in `known_accounts`, OR all of — not a lookalike handle,
   account older than 90 days (when available), original post, and low scam score.
+  Even a known account goes to review if its post has scam signals or the URL is flagged.
 - Otherwise send to the review queue with the failing signals shown.
 - Dashboard "Trust account" button adds to `known_accounts` (human-only).
 
@@ -132,11 +161,25 @@ so legitimate giveaways are not silently lost.
 - Schemes: `http`/`https` only. Reject `javascript:`, `data:`, `file:`, `ftp:` etc.
 - Re-run the guard on EVERY redirect hop; max 5 redirects. Shortener expansion counts as a fetch.
 - Block private/loopback/link-local/metadata IPs after DNS resolution (SSRF protection).
+  Resolve ONCE per hop, check every IP, then connect to a checked IP (DNS pinning via a custom
+  httpcore network backend) with the real Host header and TLS hostname, so DNS rebinding
+  can't swap in a private address.
+- robots.txt per RFC 9309: 2xx → obey; 4xx (incl. 404) → no restrictions; 5xx or network
+  failure → refuse for this run and retry next run. Successful results are cached in
+  `url_checks` (24h). Also honour a per-host minimum interval and Crawl-delay.
 - Timeout 10s. Read at most the first 2 MB and parse that (truncate, don't reject).
 - Accept `text/html`, RSS/Atom XML, `application/json`; also accept `text/plain` and
   `application/octet-stream` ONLY for feed URLs listed in `config/sources.yaml`.
   Never download or save other content types (no PDFs, archives, executables).
 - No cookies, no auth headers, no persistent sessions. Honest User-Agent identifying the bot.
+
+### API client (`src/radar/api_client.py`)
+- Fixed host allowlist: Brave Search, YouTube/Google APIs, Safe Browsing, IANA RDAP bootstrap,
+  Discord webhooks (webhook paths only). RDAP registry servers are allowed only as named in
+  IANA's bootstrap file. HTTPS only, no redirects followed, no cookies.
+- Keys come from env only and are never logged: errors name the host and status, never the
+  URL, query string or headers.
+- Any URL found in API results still goes through url_guard before it is fetched.
 - Playwright (JS execution) is allowed ONLY on TRUSTED domains, in a fresh context per page,
   and only in CI/container — never on the developer's personal machine or browser profile.
 
@@ -197,7 +240,11 @@ Streamlit, Discord webhook, GitHub Actions.
 
 ## Layout
 src/radar/adapters/*.py  - one SourceAdapter per source (fetch() -> list[RawItem])
-src/radar/url_guard.py   - reputation checks, tiers, safe fetcher (ONLY network path)
+src/radar/url_guard.py   - reputation checks, tiers, safe fetcher (only page/feed network path)
+src/radar/api_client.py  - keyed API calls (allowlisted hosts), Safe Browsing + RDAP clients
+src/radar/domains.py     - registrable-domain helpers (offline Public Suffix List)
+src/radar/config.py      - env vars (require_env, PAUSE) and YAML loading
+src/radar/migrate.py     - migration runner (schema_version)
 src/radar/widgets.py     - extract embedded Gleam/KingSumo/ViralSweep URLs from raw HTML
 src/radar/accounts.py    - account signals for PLATFORM posts
 src/radar/classify.py    - Pydantic Giveaway schema + Haiku call (no tools)
@@ -207,13 +254,13 @@ src/radar/store.py       - read/write for polling path (items, queue, logs, cach
 src/radar/admin_store.py - human-only writes (domain_tiers, known_accounts)
 src/radar/migrations/    - NNN_name.sql schema migrations
 src/radar/admin.py       - CLI: migrate, seed, export, import, trust/block domain
-src/radar/notify.py      - Discord webhook / Telegram
+src/radar/notify.py      - Discord webhook
 src/radar/run.py         - one polling cycle (idempotent, checks PAUSE)
 app/dashboard.py         - review queue + Filtered + Runs tabs
 config/domains.yaml      - SEED data for domain_tiers
 config/known_accounts.yaml   - SEED data for known_accounts
 config/protected_names.yaml  - official_domains + brand names for lookalike detection
-config/sources.yaml      - feeds, search queries, region, min prize value
+config/sources.yaml      - feeds, search queries, region
 .github/workflows/poll.yml   - scheduled polling
 .github/workflows/backup.yml - weekly DB export
 .env.example             - all variable names, no values

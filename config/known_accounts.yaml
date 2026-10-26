@@ -1,0 +1,8 @@
+# SEED data for the known_accounts table. Intentionally empty: add real accounts yourself
+# (dashboard "Trust account" button, `radar.admin trust-account`, or entries below).
+#
+# Format:
+#   accounts:
+#     - {platform: youtube, handle: "@example", note: "why trusted"}
+
+accounts: []

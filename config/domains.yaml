@@ -1,0 +1,56 @@
+# SEED data for the domain_tiers table. Loaded once with `uv run python -m radar.admin seed`
+# (inserts missing rows only, never overwrites edits made on the dashboard or via admin).
+# Official domains come from protected_names.yaml and are seeded as TRUSTED automatically.
+#
+# Any entry whose note contains UNREVIEWED is SKIPPED by seed. To approve one, change its
+# note (e.g. to "approved 2026-10-26") and run seed again.
+
+domains:
+  # --- Giveaway platforms (TRUSTED) ---
+  - {domain: gleam.io, tier: TRUSTED, note: "giveaway platform"}
+  - {domain: kingsumo.com, tier: TRUSTED, note: "giveaway platform"}
+  - {domain: viralsweep.com, tier: TRUSTED, note: "giveaway platform"}
+
+  # --- PLATFORM: the domain says nothing about the poster; judge the account ---
+  - {domain: instagram.com, tier: PLATFORM}
+  - {domain: x.com, tier: PLATFORM}
+  - {domain: twitter.com, tier: PLATFORM}
+  - {domain: youtube.com, tier: PLATFORM}
+  - {domain: tiktok.com, tier: PLATFORM}
+  - {domain: reddit.com, tier: PLATFORM}
+  - {domain: facebook.com, tier: PLATFORM}
+  - {domain: discord.com, tier: PLATFORM}
+  - {domain: threads.net, tier: PLATFORM}
+  - {domain: twitch.tv, tier: PLATFORM}
+  - {domain: bsky.app, tier: PLATFORM}
+
+  # --- LINK_HUB: never alert directly; resolve to the final destination ---
+  - {domain: linktr.ee, tier: LINK_HUB}
+  - {domain: beacons.ai, tier: LINK_HUB}
+  - {domain: lnk.bio, tier: LINK_HUB}
+  - {domain: solo.to, tier: LINK_HUB}
+  - {domain: linkin.bio, tier: LINK_HUB}
+  - {domain: allmylinks.com, tier: LINK_HUB}
+  - {domain: taplink.cc, tier: LINK_HUB}
+  - {domain: bit.ly, tier: LINK_HUB}
+  - {domain: tinyurl.com, tier: LINK_HUB}
+  - {domain: t.co, tier: LINK_HUB}
+  - {domain: ow.ly, tier: LINK_HUB}
+  - {domain: buff.ly, tier: LINK_HUB}
+  - {domain: rebrand.ly, tier: LINK_HUB}
+  - {domain: cutt.ly, tier: LINK_HUB}
+  - {domain: is.gd, tier: LINK_HUB}
+  - {domain: shorturl.at, tier: LINK_HUB}
+  - {domain: youtu.be, tier: LINK_HUB}
+  - {domain: redd.it, tier: LINK_HUB}
+  - {domain: discord.gg, tier: LINK_HUB}
+
+  # --- Drafted US shops / forums: UNREVIEWED, skipped by seed until approved ---
+  - {domain: pokebeach.com, tier: TRUSTED, note: "UNREVIEWED - news site + forums"}
+  - {domain: elitefourum.com, tier: TRUSTED, note: "UNREVIEWED - collector forum"}
+  - {domain: pokecommunity.com, tier: TRUSTED, note: "UNREVIEWED - forum"}
+  - {domain: limitlesstcg.com, tier: TRUSTED, note: "UNREVIEWED - competitive TCG site"}
+  - {domain: justinbasil.com, tier: TRUSTED, note: "UNREVIEWED - TCG news"}
+  - {domain: pkmncards.com, tier: TRUSTED, note: "UNREVIEWED - card database"}
+  - {domain: trollandtoad.com, tier: TRUSTED, note: "UNREVIEWED - US card shop"}
+  - {domain: dacardworld.com, tier: TRUSTED, note: "UNREVIEWED - US card shop"}
