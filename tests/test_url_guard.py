@@ -37,6 +37,7 @@ from radar.url_guard import (
     FetchFailed,
     GuardConfig,
     PinnedBackend,
+    PlatformLink,
     UrlGuard,
     is_public_ip,
     levenshtein,
@@ -414,6 +415,31 @@ def test_platform_domain_never_trusted_even_if_table_says_trusted(
     result = Harness(conn).guard.check("https://www.instagram.com/p/xyz/")
     assert result.tier == "PLATFORM"
     assert not result.trusted
+
+
+def test_platform_page_never_fetched(conn: sqlite3.Connection) -> None:
+    url = "https://www.instagram.com/pokeshop/p/xyz/"
+    h = Harness(conn, {url: html()})
+    with pytest.raises(PlatformLink) as exc:
+        h.guard.fetch(url)
+    assert exc.value.url == url and exc.value.guard.tier == "PLATFORM"
+    assert h.requests == []  # not even robots.txt
+    assert filtered(conn) == []  # not a guardrail drop
+    verdicts = [r[0] for r in conn.execute("SELECT verdict FROM fetch_log")]
+    assert verdicts == ["SKIP:platform"]
+
+
+def test_shortener_redirect_to_platform_stops_before_platform(
+    conn: sqlite3.Connection,
+) -> None:
+    admin_store.set_domain_tier(conn, "bit.ly", "LINK_HUB")
+    short, target = "https://bit.ly/abc", "https://www.instagram.com/pokeshop/"
+    h = Harness(conn, {short: redirect(target), target: html()})
+    with pytest.raises(PlatformLink) as exc:
+        h.guard.fetch(short)
+    assert exc.value.url == target  # the resolved URL, for judging the account
+    assert exc.value.hops == [short]
+    assert all(r.url.host != "www.instagram.com" for r in h.requests)
 
 
 def test_unknown_domain_not_trusted(conn: sqlite3.Connection) -> None:

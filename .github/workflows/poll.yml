@@ -1,0 +1,49 @@
+name: poll
+
+# Hourly at an offset minute, plus a manual "Run workflow" button.
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+# Runs never overlap; a queued run waits instead of cancelling the one in progress.
+concurrency:
+  group: poll
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # PAUSE=1 (repository variable) skips the job entirely; run.py also checks it.
+    if: ${{ vars.PAUSE != '1' }}
+    env:
+      DB_BACKEND: turso
+      PAUSE: ${{ vars.PAUSE }}
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen --no-dev
+
+      - name: Apply migrations
+        run: uv run --no-sync python -m radar.admin migrate
+
+      - name: Poll once
+        run: uv run --no-sync python -m radar.run --once
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BRAVE_API_KEY: ${{ secrets.BRAVE_API_KEY }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          SAFE_BROWSING_API_KEY: ${{ secrets.SAFE_BROWSING_API_KEY }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}

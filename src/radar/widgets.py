@@ -19,7 +19,7 @@ from selectolax.lexbor import LexborHTMLParser
 
 from radar import store
 from radar.domains import registrable_domain
-from radar.url_guard import Blocked, FetchFailed, FetchResult, UrlGuard
+from radar.url_guard import Blocked, FetchFailed, FetchResult, PlatformLink, UrlGuard
 
 WIDGET_DOMAINS = {
     "gleam.io": "gleam",
@@ -128,6 +128,29 @@ def extract_widgets(html: str, base_url: str) -> WidgetScan:
     return scan
 
 
+# Total-entry counts as widget pages print them. Only TOTALS: per-action bonuses such as
+# "+5 entries" must never be read as the number of entrants.
+_ENTRY_COUNT_PATTERNS = [
+    re.compile(r'"(?:total_entries|total_entry_count|entry_count|entries_count)"\s*:\s*"?(\d+)',
+               re.IGNORECASE),
+    re.compile(r"\btotal\s+entries\s*:?\s*(\d[\d,]*)", re.IGNORECASE),
+    re.compile(r"(\d[\d,]*)\s+total\s+entries\b", re.IGNORECASE),
+    re.compile(r"(\d[\d,]*)\s+entries\s+(?:so\s+far|received|submitted)\b", re.IGNORECASE),
+]
+
+
+def entry_count(html: str) -> int | None:
+    """Total entries shown on a widget page, or None when the page doesn't show one.
+
+    Display-only input for the "fewer entrants" hint: it never affects pinging or gates.
+    """
+    for rx in _ENTRY_COUNT_PATTERNS:
+        m = rx.search(html)
+        if m:
+            return int(m.group(1).replace(",", ""))
+    return None
+
+
 def discover_widgets(guard: UrlGuard, conn: Any, page: FetchResult) -> list[WidgetFetch]:
     """For an UNKNOWN or TRUSTED page fetched without JS: find embedded widgets, record the
     host->widget link, and fetch each widget through the guard (every guardrail applies)."""
@@ -139,6 +162,6 @@ def discover_widgets(guard: UrlGuard, conn: Any, page: FetchResult) -> list[Widg
         store.record_widget_link(conn, page.final_url, widget.url, widget.kind)
         try:
             fetched.append(WidgetFetch(widget, guard.fetch(widget.url)))
-        except (Blocked, FetchFailed) as exc:
+        except (Blocked, FetchFailed, PlatformLink) as exc:
             fetched.append(WidgetFetch(widget, None, error=str(exc)))
     return fetched

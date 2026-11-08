@@ -4,10 +4,12 @@ import sqlite3
 from pathlib import Path
 
 import httpx
+import pytest
 from guard_harness import FakeSafeBrowsing, Harness, filtered, html
 
 from radar import admin_store
-from radar.widgets import MAX_WIDGETS_PER_PAGE, discover_widgets, extract_widgets
+from radar.url_guard import FetchResult, PlatformLink
+from radar.widgets import MAX_WIDGETS_PER_PAGE, discover_widgets, entry_count, extract_widgets
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SHOP = "https://cardboardkingdom.example/pages/giveaway"
@@ -92,7 +94,15 @@ def test_platform_pages_are_not_scanned(conn: sqlite3.Connection) -> None:
     admin_store.set_domain_tier(conn, "youtube.com", "PLATFORM")
     url = "https://www.youtube.com/watch?v=abc"
     h = Harness(conn, {url: html(fixture("embedded_widgets.html"))})
-    assert discover_widgets(h.guard, conn, h.guard.fetch(url)) == []
+    # PLATFORM pages are never fetched in the first place...
+    with pytest.raises(PlatformLink):
+        h.guard.fetch(url)
+    assert h.requests == []
+    # ...and a PLATFORM page handed in anyway is not scanned.
+    guard = h.guard.check(url)
+    page = FetchResult(url, url, 200, "text/html", fixture("embedded_widgets.html").encode(),
+                       False, guard, [url])
+    assert discover_widgets(h.guard, conn, page) == []
     assert conn.execute("SELECT COUNT(*) FROM widget_links").fetchone()[0] == 0
 
 
@@ -114,3 +124,29 @@ def test_non_html_widget_response_not_saved(conn: sqlite3.Connection) -> None:
     found = discover_widgets(h.guard, conn, h.guard.fetch(SHOP))
     assert found[0].result is None
     assert (widget_url, "content_type") in filtered(conn)
+
+
+@pytest.mark.parametrize(
+    ("page", "expected"),
+    [
+        ('<script>var c = {"total_entries": 342, "x": 1}</script>', 342),
+        ('{"entry_count":"1250"}', 1250),
+        ("<div>Total entries: 1,204</div>", 1204),
+        ("<span>87 total entries</span>", 87),
+        ("<p>2,500 entries so far</p>", 2500),
+    ],
+)
+def test_entry_count_read_from_widget_page(page: str, expected: int) -> None:
+    assert entry_count(page) == expected
+
+
+@pytest.mark.parametrize(
+    "page",
+    [
+        "<li>Visit our shop: +5 entries</li><li>Follow us: 3 entries</li>",
+        "<p>Earn bonus entries by sharing!</p>",
+        "",
+    ],
+)
+def test_entry_count_ignores_per_action_bonuses(page: str) -> None:
+    assert entry_count(page) is None

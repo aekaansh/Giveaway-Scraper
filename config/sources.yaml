@@ -1,4 +1,4 @@
-# Sources for the polling bot (adapters arrive in Phase 2). DRAFT for human review.
+# Sources for the polling bot. DRAFT for human review.
 
 region:
   country: US
@@ -9,10 +9,10 @@ region:
 # Logged-out RSS/Atom feeds. Only URLs listed here may be served as text/plain or
 # application/octet-stream by the fetcher.
 #
-# Reddit subreddit RSS is ON HOLD until Reddit's actual robots.txt is checked in Phase 2.
-# If it disallows us, these are dropped in favour of the official Reddit API (via
-# api_client.py) or Reddit posts found through Brave results. Candidates:
-#   r/PokemonTCG, r/pkmntcgcollections, r/PokemonTCGDeals  (/new/.rss)
+# Reddit: robots.txt checked 2026-11-07. It says "User-agent: *  Disallow: /", so the
+# subreddit RSS feeds are dropped. Reddit posts reach the bot only as links in Brave
+# results, judged by the PLATFORM account rules (Reddit pages are never fetched).
+# The official Reddit API (via api_client.py) is a possible later addition.
 feeds: []
 
 brave:
@@ -20,12 +20,32 @@ brave:
     - "pokemon tcg giveaway"
     - "pokemon card giveaway US"
     - "pokemon booster box giveaway"
+  count: 20  # results per query
+  freshness: pw  # pd = past day, pw = past week, pm = past month
 
 youtube:
   queries:
     - "pokemon card giveaway"
     - "pokemon tcg giveaway"
+  max_results: 15  # per query; each search costs 100 of the 10,000 daily quota units
+  published_within_days: 7
 
 rate_limits:
   # Minimum seconds between requests to the same host.
   per_host_min_interval_seconds: 5
+
+limits:
+  # New source items handled per run (the rest wait for the next run). Keeps a run
+  # under ~2 minutes and caps classifier calls.
+  max_new_items_per_run: 25
+
+digest:
+  # Daily review-queue digest goes out with the first run at or after this hour (UTC).
+  # 14 UTC = 9am Eastern (10am during daylight saving time).
+  hour_utc: 14
+
+# "FEW ENTRANTS" badge: a display-only hint on alerts and queue items. It never changes
+# what gets pinged, the queue order (soonest deadline first) or any safety check.
+odds_hint:
+  max_entries: 500  # widget shows at most this many total entries
+  max_followers: 5000  # no entry count shown: posting account has at most this many

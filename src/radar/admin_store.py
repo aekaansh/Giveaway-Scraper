@@ -25,6 +25,7 @@ EXPORT_TABLES = (
     "known_accounts",
     "run_log",
     "widget_links",
+    "notify_state",
 )
 UNREVIEWED = "UNREVIEWED"
 _COLUMN_RE = re.compile(r"^[a-z_][a-z0-9_]*$")

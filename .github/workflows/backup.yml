@@ -1,0 +1,44 @@
+name: backup
+
+# Weekly export of the Turso database as a workflow artifact (kept 30 days).
+# Restore with: uv run python -m radar.admin import <file>
+on:
+  schedule:
+    - cron: "41 6 * * 1"  # Mondays 06:41 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DB_BACKEND: turso
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen --no-dev
+
+      - name: Export database
+        run: uv run --no-sync python -m radar.admin export --out radar-export.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: radar-export-${{ github.run_number }}
+          path: radar-export.json
+          retention-days: 30
+          if-no-files-found: error
