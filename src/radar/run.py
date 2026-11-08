@@ -198,6 +198,10 @@ class Cycle:
                     self.process(item)
                 except (FetchFailed, ClassifyError) as exc:
                     self.stats.errors.append(f"{type(exc).__name__}: {exc}")
+                except Exception as exc:  # one bad page must not stop the run
+                    # Not marked processed, so it is retried next run. Log the type and
+                    # URL only (never the message: it could echo page content).
+                    self.stats.errors.append(f"unexpected {type(exc).__name__}: {item.url}")
             self.send_pending_alerts()
             self.maybe_send_digest()
         finally:

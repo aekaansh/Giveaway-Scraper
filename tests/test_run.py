@@ -504,3 +504,16 @@ def test_run_config_loads_repo_config() -> None:
     assert cfg.eligible_countries == ("US",)
     assert cfg.odds == OddsHint(500, 5000)
     assert cfg.max_new_items == 25
+
+
+def test_unexpected_error_on_one_item_does_not_stop_the_run(
+    trusted_gleam: sqlite3.Connection,
+) -> None:
+    conn = trusted_gleam
+    bad = "https://gleam.io/BAD/giveaway"
+    h = Harness(conn, {bad: gleam_page(), GLEAM: gleam_page()})
+    classifier = FakeClassifier({bad: RuntimeError("bug")})
+    stats, notifier = run_cycle(conn, h, item(bad), item(GLEAM), classifier=classifier)
+    assert [g["url"] for g, _ in notifier.alerts] == [GLEAM]
+    assert stats.errors == [f"unexpected RuntimeError: {bad}"]
+    assert not conn.execute("SELECT 1 FROM raw_items WHERE url = ?", (bad,)).fetchone()

@@ -150,3 +150,9 @@ def test_entry_count_read_from_widget_page(page: str, expected: int) -> None:
 )
 def test_entry_count_ignores_per_action_bonuses(page: str) -> None:
     assert entry_count(page) is None
+
+
+def test_malformed_urls_are_skipped_not_raised() -> None:
+    page = '<a href="http://[not-an-ip]/x">x</a><script>u="https://[gleam.io/x"</script>'
+    scan = extract_widgets(page, "https://shop.example/")
+    assert scan.widgets == []

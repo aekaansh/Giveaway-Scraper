@@ -201,3 +201,18 @@ def test_rdap_bootstrap_down_is_unavailable() -> None:
     api, _ = client(lambda r: httpx.Response(503))
     with pytest.raises(ReputationUnavailable):
         RdapDomainAge(api).registered_at("old.com")
+
+
+def test_gzip_response_is_decoded_once() -> None:
+    import gzip
+
+    payload = gzip.compress(json.dumps({"web": {"results": []}}).encode())
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, headers={"content-encoding": "gzip",
+                                            "content-type": "application/json"},
+                              content=payload)
+
+    api, _ = client(handler)
+    assert api.get_json("https://api.search.brave.com/res/v1/web/search") == {
+        "web": {"results": []}}

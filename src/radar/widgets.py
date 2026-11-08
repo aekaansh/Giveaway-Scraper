@@ -74,10 +74,10 @@ def _classify(raw: str, base_url: str, source: str) -> tuple[str, Widget] | None
     value = _clean(raw)
     if not value or value.lower().startswith(("javascript:", "data:", "mailto:")):
         return None
-    url = urldefrag(urljoin(base_url, value)).url
     try:
+        url = urldefrag(urljoin(base_url, value)).url
         parts = urlsplit(url)
-    except ValueError:
+    except ValueError:  # malformed, e.g. "http://[not-an-ip]/"
         return None
     if parts.scheme not in ("http", "https") or not parts.hostname:
         return None
