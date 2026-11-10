@@ -1,0 +1,7 @@
+{"items": [
+  {"id": "UCaaa", "snippet": {"title": "Card Shop", "customUrl": "@CardShopTV",
+     "publishedAt": "2019-03-01T00:00:00Z"},
+   "statistics": {"subscriberCount": "48000", "hiddenSubscriberCount": false}},
+  {"id": "UCbbb", "snippet": {"title": "New Channel", "publishedAt": "2026-10-30T00:00:00Z"},
+   "statistics": {"hiddenSubscriberCount": true}}
+]}

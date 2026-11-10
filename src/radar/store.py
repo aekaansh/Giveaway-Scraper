@@ -159,6 +159,116 @@ def record_widget_link(conn: Any, host_url: str, widget_url: str, kind: str) -> 
     conn.commit()
 
 
+# --- items, giveaways, review queue -------------------------------------------------
+
+
+def raw_item_exists(conn: Any, external_id: str) -> bool:
+    row = conn.execute("SELECT 1 FROM raw_items WHERE external_id = ?", (external_id,)).fetchone()
+    return row is not None
+
+
+def insert_raw_item(
+    conn: Any, *, source: str, external_id: str, url: str, title: str | None,
+    body: str | None, author: str | None, published_at: str | None,
+) -> int:
+    """Mark a source item as processed (dedup key: external_id). Returns its id."""
+    conn.execute(
+        "INSERT OR IGNORE INTO raw_items"
+        " (source, external_id, url, title, body, author, published_at, fetched_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (source, external_id, url, title, body, author, published_at, iso(utcnow())),
+    )
+    conn.commit()
+    row = conn.execute("SELECT id FROM raw_items WHERE external_id = ?", (external_id,)).fetchone()
+    return int(row[0])
+
+
+GIVEAWAY_FIELDS = (
+    "raw_item_id", "url", "host_url", "domain", "tier", "platform", "account_handle", "title",
+    "summary", "region", "deadline", "scam_likelihood", "flags_json", "alert_eligible",
+    "entry_count", "account_followers", "domain_age_days", "account_age_days",
+)
+
+
+def insert_giveaway(conn: Any, canonical_key: str, **fields: Any) -> int | None:
+    """Insert a new giveaway. Returns its id, or None if this canonical_key already exists
+    (the same giveaway found again: nothing new to alert or queue)."""
+    unknown = set(fields) - set(GIVEAWAY_FIELDS)
+    if unknown:
+        raise ValueError(f"unknown giveaway fields: {sorted(unknown)}")
+    if conn.execute(
+        "SELECT 1 FROM giveaways WHERE canonical_key = ?", (canonical_key,)
+    ).fetchone():
+        return None
+    cols = ["canonical_key", *fields, "created_at"]
+    cur = conn.execute(
+        f"INSERT INTO giveaways ({', '.join(cols)}) VALUES ({', '.join('?' for _ in cols)})",
+        [canonical_key, *fields.values(), iso(utcnow())],
+    )
+    conn.commit()
+    return int(cur.lastrowid)
+
+
+def enqueue_review(conn: Any, giveaway_id: int, reasons: list[str], deadline: str | None) -> None:
+    now = iso(utcnow())
+    conn.execute(
+        "INSERT OR IGNORE INTO review_queue"
+        " (giveaway_id, status, reasons_json, deadline, created_at, updated_at)"
+        " VALUES (?, 'new', ?, ?, ?, ?)",
+        (giveaway_id, json.dumps(reasons), deadline, now, now),
+    )
+    conn.commit()
+
+
+def pending_alerts(conn: Any) -> list[dict[str, Any]]:
+    """Giveaways that passed the ping rules but haven't been sent to Discord yet."""
+    return rows(conn.execute(
+        "SELECT * FROM giveaways WHERE alert_eligible = 1 AND alerted_at IS NULL ORDER BY id"
+    ))
+
+
+def mark_alerted(conn: Any, giveaway_id: int) -> None:
+    conn.execute("UPDATE giveaways SET alerted_at = ? WHERE id = ?",
+                 (iso(utcnow()), giveaway_id))
+    conn.commit()
+
+
+def demote_to_review(conn: Any, giveaway: dict[str, Any], reasons: list[str]) -> None:
+    """A pending alert that failed its final check goes to the review queue instead."""
+    conn.execute("UPDATE giveaways SET alert_eligible = 0 WHERE id = ?", (giveaway["id"],))
+    conn.commit()
+    enqueue_review(conn, giveaway["id"], reasons, giveaway.get("deadline"))
+
+
+def review_queue_items(conn: Any, limit: int) -> tuple[list[dict[str, Any]], int]:
+    """New queue items, soonest deadline first (no deadline last), and the total count."""
+    total = conn.execute("SELECT COUNT(*) FROM review_queue WHERE status = 'new'").fetchone()[0]
+    items = rows(conn.execute(
+        "SELECT g.*, q.reasons_json FROM review_queue q JOIN giveaways g ON g.id = q.giveaway_id"
+        " WHERE q.status = 'new'"
+        " ORDER BY q.deadline IS NULL, q.deadline, q.created_at LIMIT ?",
+        (limit,),
+    ))
+    return items, int(total)
+
+
+def get_state(conn: Any, key: str) -> str | None:
+    row = conn.execute("SELECT value FROM notify_state WHERE key = ?", (key,)).fetchone()
+    return row[0] if row else None
+
+
+def set_state(conn: Any, key: str, value: str) -> None:
+    conn.execute(
+        "INSERT INTO notify_state (key, value, updated_at) VALUES (?, ?, ?)"
+        " ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+        (key, value, iso(utcnow())),
+    )
+    conn.commit()
+
+
+# --- run log ------------------------------------------------------------------------
+
+
 def start_run(conn: Any) -> int:
     cur = conn.execute("INSERT INTO run_log (started_at) VALUES (?)", (iso(utcnow()),))
     conn.commit()

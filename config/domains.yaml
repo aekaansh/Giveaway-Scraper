@@ -45,12 +45,12 @@ domains:
   - {domain: redd.it, tier: LINK_HUB}
   - {domain: discord.gg, tier: LINK_HUB}
 
-  # --- Drafted US shops / forums: UNREVIEWED, skipped by seed until approved ---
-  - {domain: pokebeach.com, tier: TRUSTED, note: "UNREVIEWED - news site + forums"}
-  - {domain: elitefourum.com, tier: TRUSTED, note: "UNREVIEWED - collector forum"}
-  - {domain: pokecommunity.com, tier: TRUSTED, note: "UNREVIEWED - forum"}
-  - {domain: limitlesstcg.com, tier: TRUSTED, note: "UNREVIEWED - competitive TCG site"}
-  - {domain: justinbasil.com, tier: TRUSTED, note: "UNREVIEWED - TCG news"}
-  - {domain: pkmncards.com, tier: TRUSTED, note: "UNREVIEWED - card database"}
-  - {domain: trollandtoad.com, tier: TRUSTED, note: "UNREVIEWED - US card shop"}
-  - {domain: dacardworld.com, tier: TRUSTED, note: "UNREVIEWED - US card shop"}
+  # --- US shops / forums: approved by the owner 2026-11-08 ---
+  - {domain: pokebeach.com, tier: TRUSTED, note: "approved 2026-11-08 - news site + forums"}
+  - {domain: elitefourum.com, tier: TRUSTED, note: "approved 2026-11-08 - collector forum"}
+  - {domain: pokecommunity.com, tier: TRUSTED, note: "approved 2026-11-08 - forum"}
+  - {domain: limitlesstcg.com, tier: TRUSTED, note: "approved 2026-11-08 - competitive TCG site"}
+  - {domain: justinbasil.com, tier: TRUSTED, note: "approved 2026-11-08 - TCG news"}
+  - {domain: pkmncards.com, tier: TRUSTED, note: "approved 2026-11-08 - card database"}
+  - {domain: trollandtoad.com, tier: TRUSTED, note: "approved 2026-11-08 - US card shop"}
+  - {domain: dacardworld.com, tier: TRUSTED, note: "approved 2026-11-08 - US card shop"}

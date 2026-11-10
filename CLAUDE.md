@@ -10,11 +10,11 @@ Discover, classify and alert on Pokemon TCG giveaways. The human enters manually
 - Phase 4: assisted entry (local only, as described below)
 
 ## Sources and region
-- Sources: Brave Search API, YouTube Data API, Reddit subreddit RSS (logged-out `.rss` feeds,
-  honest User-Agent, polite rate limits). TRUSTED sites/forums are added only after human vetting.
-- Reddit RSS is ON HOLD until Reddit's actual robots.txt is checked (Phase 2). If it disallows
-  us, drop the feeds and use either the official Reddit API (via `api_client.py`) or Reddit
-  posts found through Brave results.
+- Sources: Brave Search API, YouTube Data API. TRUSTED sites/forums are added only after
+  human vetting.
+- Reddit: robots.txt (checked 2026-11-07) is `User-agent: * / Disallow: /`, so there are NO
+  Reddit RSS feeds. Reddit posts enter only as links in Brave results (PLATFORM rules). The
+  official Reddit API (via `api_client.py`) is a possible later addition.
 - Instagram, TikTok and X are NEVER scraped or read logged-out. They enter only as links found
   in search results, and are judged with the PLATFORM account rules.
 - Region: USA. USD, US-eligible giveaways only; skip ones limited to other countries.
@@ -158,6 +158,8 @@ so legitimate giveaways are not silently lost.
 - Dashboard "Trust account" button adds to `known_accounts` (human-only).
 
 ### Fetch sandbox
+- PLATFORM pages are NEVER fetched, including as a redirect hop: `fetch` raises `PlatformLink`
+  with the resolved URL before any request, and run.py judges the account instead.
 - Schemes: `http`/`https` only. Reject `javascript:`, `data:`, `file:`, `ftp:` etc.
 - Re-run the guard on EVERY redirect hop; max 5 redirects. Shortener expansion counts as a fetch.
 - Block private/loopback/link-local/metadata IPs after DNS resolution (SSRF protection).
@@ -188,6 +190,8 @@ so legitimate giveaways are not silently lost.
   anchors, data attributes) for embedded widget URLs: gleam.io, kingsumo.com, viralsweep.com.
 - Pass each extracted widget URL through the guard and fetch it (these are TRUSTED), then
   classify the widget page together with the host page. Record the host→widget link.
+- The widget URL is what gets judged and posted (entry happens there). The host page's
+  warning flags still hold back the ping, except NOT TRUSTED.
 
 ### Deterministic rules override the LLM (`src/radar/scoring.py`)
 - Match PHRASES that request something from the entrant, not single words:
@@ -213,6 +217,11 @@ so legitimate giveaways are not silently lost.
 - Every alert and queue item shows the full real domain (or account handle), tier, domain/account
   age, and warning badges: NEW DOMAIN, LOOKALIKE?, NOT TRUSTED, SCAM SIGNALS.
 - Never post shortened or redirecting links — post the final resolved URL only.
+- FEW ENTRANTS badge (`odds_hint` in `config/sources.yaml`): shown when a widget page shows
+  few total entries, or (no count shown) the posting account is small. DISPLAY ONLY: it never
+  changes what is pinged, the queue order, or any safety check. Never based on prize value.
+- Alerts are sent after the giveaway row is saved and re-checked by the guard; `alerted_at`
+  is set only once Discord accepts it, so a failed send is retried and never duplicated.
 - Dashboard buttons: Open, Entered, Skip, Scam (→ BLOCKED), Trust domain, Trust account.
 
 ### Assisted entry (Claude in Chrome, Phase 4)
@@ -239,7 +248,7 @@ anthropic SDK (Haiku 5.5, structured outputs), Turso (`turso_serverless`) / sqli
 Streamlit, Discord webhook, GitHub Actions.
 
 ## Layout
-src/radar/adapters/*.py  - one SourceAdapter per source (fetch() -> list[RawItem])
+src/radar/adapters/*.py  - one SourceAdapter per source (fetch() -> list[RawItem]): brave, youtube
 src/radar/url_guard.py   - reputation checks, tiers, safe fetcher (only page/feed network path)
 src/radar/api_client.py  - keyed API calls (allowlisted hosts), Safe Browsing + RDAP clients
 src/radar/domains.py     - registrable-domain helpers (offline Public Suffix List)

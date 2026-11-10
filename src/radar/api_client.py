@@ -108,7 +108,11 @@ class ApiClient:
             raise ApiError(f"{host} answered with a redirect (HTTP {status}); not followed")
         if not (200 <= status < 300) and status not in ok_statuses:
             raise ApiError(f"{host} returned HTTP {status}")
-        return httpx.Response(status, headers=response.headers, content=bytes(body),
+        # iter_bytes() already decompressed the body: drop the encoding headers so the
+        # rebuilt response doesn't try to decompress it a second time.
+        headers = [(k, v) for k, v in response.headers.multi_items()
+                   if k.lower() not in ("content-encoding", "content-length")]
+        return httpx.Response(status, headers=headers, content=bytes(body),
                               request=response.request)
 
     def get_json(self, url: str, **kwargs: Any) -> Any:

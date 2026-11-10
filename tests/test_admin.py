@@ -43,10 +43,10 @@ def test_seed_command_with_real_config(conn: sqlite3.Connection, capsys) -> None
         assert store.get_domain_tier(conn, official) == "TRUSTED"
     assert store.get_domain_tier(conn, "instagram.com") == "PLATFORM"
     assert store.get_domain_tier(conn, "bit.ly") == "LINK_HUB"
-    # Drafted shops stay out until the human approves them.
-    assert store.get_domain_tier(conn, "trollandtoad.com") is None
+    # Shops the owner approved on 2026-11-08 (the UNREVIEWED skip rule is tested above).
+    assert store.get_domain_tier(conn, "trollandtoad.com") == "TRUSTED"
     assert conn.execute("SELECT COUNT(*) FROM known_accounts").fetchone()[0] == 0
-    assert "UNREVIEWED" in capsys.readouterr().out
+    assert "UNREVIEWED" not in capsys.readouterr().out
 
 
 def test_set_domain_tier_rejects_unknown_tier(conn: sqlite3.Connection) -> None:

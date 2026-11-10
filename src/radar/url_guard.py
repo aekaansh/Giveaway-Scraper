@@ -14,7 +14,8 @@ alerted on:
 
 The fetcher resolves DNS once, refuses non-public addresses (SSRF) and connects to the
 vetted IP itself (no second lookup, so DNS rebinding can't swap in a private address),
-re-checks each redirect hop (max 5), follows robots.txt per RFC 9309 and a per-host
+re-checks each redirect hop (max 5), never fetches PLATFORM pages (raises PlatformLink
+with the resolved URL instead), follows robots.txt per RFC 9309 and a per-host
 interval, sends no cookies or auth, reads at most 2 MB, and only accepts HTML / feeds /
 JSON (text/plain and octet-stream only for feed URLs from config/sources.yaml).
 
@@ -100,6 +101,16 @@ class Blocked(GuardError):
 
 class FetchFailed(GuardError):
     """Network problem (DNS, timeout, connection). Not a guardrail decision."""
+
+
+class PlatformLink(GuardError):
+    """The URL (or a redirect hop) is on a PLATFORM host. PLATFORM pages are never fetched
+    (Instagram, TikTok, X etc. are never read logged-out): the post is judged by its
+    account instead. Not a block: `url` is the resolved platform URL, `guard` its check."""
+
+    def __init__(self, url: str, guard: GuardResult, hops: list[str]) -> None:
+        super().__init__(f"PLATFORM link, not fetched: {url}")
+        self.url, self.guard, self.hops = url, guard, hops
 
 
 # --- reputation service interfaces (real clients live in api_client.py) -----------------
@@ -534,6 +545,12 @@ class UrlGuard:
         for _ in range(MAX_REDIRECTS + 1):
             try:
                 guard = self._evaluate(current)
+                if guard.tier == "PLATFORM" and not robots_txt and (
+                    requested not in self.config.feed_urls
+                ):
+                    store.log_fetch(self._conn, current, guard.domain, guard.tier,
+                                    "SKIP:platform")
+                    raise PlatformLink(current, guard, hops)
                 self._vet_dns(current, guard)
                 if not robots_txt:
                     self._check_robots(current, guard)
